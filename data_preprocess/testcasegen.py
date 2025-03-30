@@ -17,83 +17,106 @@ INSTRUCTION = """
 You are a professional who writes {lang} test methods. Your task is to generate a {lang} function without any natural language descriptions.
 """
 
+def extract_function_details(code_str):
+    # Match the function definition line and extract the function name
+    func_def_match = re.search(r'def\s+(\w+)\s*\(.*\):', code_str)
+    if not func_def_match:
+        return None, None
 
-def make_prefix(dp):
+    func_name = func_def_match.group(1)
 
-    input_str = """<|im_start|>system\nYou are a helpful assistant. You first thinks about the reasoning process in the mind and then provides the user with the answer.<|im_end|>\n<|im_start|>user\n""" + INSTRUCTION.format(lang='Python')
+    # Extract the full function code starting from the matched 'def' line
+    func_start_index = func_def_match.start()
+    
+    # Optionally, we can attempt to extract until the function logically ends
+    # For simplicity, we'll take until the next non-indented line or end of string
+    lines = code_str[func_start_index:].splitlines()
+    func_lines = [lines[0]]
+
+    for line in lines[1:]:
+        if line.strip() == "":
+            func_lines.append(line)
+        elif line.startswith((' ', '\t')):
+            func_lines.append(line)
+        else:
+            break
+
+    func_code = "\n".join(func_lines)
+    return func_name, func_code
+
+
+def make_prefix(dp, split):
+
+    prompt_template=open('./TestEval/prompt/template_base.txt').read()
+
+    if split == 'test':
+        func_name=dp['func_name']
+        desc=dp['description']
+        code=dp['python_solution']
+    elif split == 'train':
+        desc = dp['content'].split('**Example 1:**')[0]
+        python_code = dp['python']
+        func_name, code = extract_function_details(python_code)
+
+    prompt=prompt_template.format(lang='python', program=code, description=desc, func_name=func_name)
+
+    input_str = """<|im_start|>system\nYou are a helpful assistant. You first thinks about the reasoning process in the mind and then provides the user with the answer.<|im_end|>\n<|im_start|>user\n""" + INSTRUCTION.format(lang='python')
     input_str += """\nShow your work in <think> </think> tags. Your final response must be in JSON format within <answer> </answer> tags. For example,
 <think>
 [thinking process]
 </think>
 <answer>
 {
-    "query": "...."
+    "test method": "...."
 } 
 </answer>. 
 Note: Your answer should not include any quotation marks or descriptions outside the function definition.
-
-Here's the user query:
 """
 
-    input_str +=  dp['input'] + """
-Assistant: Let me rewrite the query with reasoning. 
+    input_str +=  prompt + """
+Assistant: Let me think step by step. 
 <think>
 """
 
     return input_str
 
 
-def load_matching_dataset():
-    
-    data_train = []
-    data_test = []
-    data_val = []
-    
-    with open('data/raw_data/nq_serini/train.jsonl', 'r') as f:
-        for line in f:
-            data_train.append(json.loads(line))
+def load_dataset_testcasegen():
 
-    with open('data/raw_data/nq_serini/test.jsonl', 'r') as f:
-        for line in f:
-            data_test.append(json.loads(line))
-            
-    with open('data/raw_data/nq_serini/dev.jsonl', 'r') as f:
-        cnt = 0
-        for line in f:
-            data_val.append(json.loads(line))
-            cnt += 1
-            if cnt > 200:
-                break
+    original_leetcode = load_dataset('greengerong/leetcode')['train']
+    with open('./TestEval/data/leetcode-py.jsonl', 'r') as f:
+        testeval = [json.loads(line) for line in f]
     
-    train_data = [{'input': x['question'], 'label': x['answers']} for x in data_train]
-    test_data = [{'input': x['question'], 'label': x['answers']} for x in data_test]
-    val_data = [{'input': x['question'], 'label': x['answers']} for x in data_val]
+    # filter out the testeval data from the original leetcode dataset
+    testeval_ids = [x['task_num'] for x in testeval]
+    original_leetcode = [x for x in original_leetcode if x['id'] not in testeval_ids]
+
+    print(f"Filtered training data size: {len(original_leetcode)}")
+    print(f"Test dataset size: {len(testeval)}")
     
-    return train_data, test_data, val_data
+    return original_leetcode, testeval
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--local_dir', default='data/local_index_search')
+    parser.add_argument('--local_dir', default='data')
     parser.add_argument('--hdfs_dir', default=None)
-    parser.add_argument('--dataset', type=str, default='nq_serini')
+    parser.add_argument('--dataset', type=str, default='testcasegen')
 
     args = parser.parse_args()
     
     data_source = args.dataset
     
-    train_data, test_data, val_data = load_matching_dataset()
+    train_data, test_data = load_dataset_testcasegen()
 
     train_dataset = Dataset.from_list(train_data)
     test_dataset = Dataset.from_list(test_data)
-    val_dataset = Dataset.from_list(val_data)
-
-
+    
     def make_map_fn(split):
-        def process_fn(example, idx):
-            question = make_prefix(example)
+        def process_fn_test(example, idx):
+            question = make_prefix(example, split)
             solution = {
-                "target": example['label'],
+                "target": "",
             }
             data = {
                 "data_source": data_source,
@@ -101,7 +124,7 @@ if __name__ == '__main__':
                     "role": "user",
                     "content": question,
                 }],
-                "ability": "literature_mining",
+                "ability": "coding",
                 "reward_model": {
                     "style": "rule",
                     "ground_truth": solution
@@ -112,15 +135,15 @@ if __name__ == '__main__':
                 }
             }
             return data
-        return process_fn
+        return process_fn_test
     
     train_dataset = train_dataset.map(function=make_map_fn('train'), with_indices=True)
     test_dataset = test_dataset.map(function=make_map_fn('test'), with_indices=True)
-    val_dataset = val_dataset.map(function=make_map_fn('val'), with_indices=True)
+
     # shuffle the dataset
     train_dataset = train_dataset.shuffle(seed=42)
     test_dataset = test_dataset.shuffle(seed=42)
-    val_dataset = val_dataset.shuffle(seed=42)
+
     
     lengths_list = []
     for d in train_dataset:
@@ -130,13 +153,9 @@ if __name__ == '__main__':
     for d in test_dataset:
         lengths_list_test.append(len(d['prompt'][0]['content'].split()))
         
-    lengths_list_val = []
-    for d in val_dataset:
-        lengths_list_val.append(len(d['prompt'][0]['content'].split()))
         
     print(f"Average length of train dataset: {sum(lengths_list) / len(lengths_list)}")
     print(f"Average length of test dataset: {sum(lengths_list_test) / len(lengths_list_test)}")
-    print(f"Average length of val dataset: {sum(lengths_list_val) / len(lengths_list_val)}")
     
     local_dir = os.path.join(args.local_dir, args.dataset)
     hdfs_dir = os.path.join(args.hdfs_dir, args.dataset) if args.hdfs_dir is not None else None
@@ -145,7 +164,6 @@ if __name__ == '__main__':
     
     train_dataset.to_parquet(os.path.join(local_dir, 'train.parquet'))
     test_dataset.to_parquet(os.path.join(local_dir, 'test.parquet'))
-    val_dataset.to_parquet(os.path.join(local_dir, 'val.parquet'))
     
     if hdfs_dir is not None:
         makedirs(hdfs_dir)
