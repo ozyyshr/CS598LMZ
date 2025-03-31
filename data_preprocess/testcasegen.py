@@ -10,6 +10,7 @@ import json
 from collections import defaultdict, Counter
 import random
 import pdb
+import textwrap
 
 
 
@@ -41,8 +42,12 @@ def extract_function_details(code_str):
         else:
             break
 
-    func_code = "\n".join(func_lines)
-    return func_name, func_code
+    # For function codes, we add class Solution: to each, resolving traing/test misalignment
+    indented_func = textwrap.indent("\n".join(func_lines), '    ')
+    # Wrap in a class
+    class_wrapper = f"class Solution:\n{indented_func}"
+
+    return func_name, class_wrapper
 
 
 def make_prefix(dp, split):
