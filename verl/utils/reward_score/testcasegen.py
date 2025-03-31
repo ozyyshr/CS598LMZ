@@ -114,7 +114,7 @@ def compute_score(solution_str, ground_truth):
     func_name = ground_truth['func_name']
     code = ground_truth['code']
     
-    do_print = random.randint(1, 32) == 1
+    do_print = random.randint(1, 16) == 1
 
     # Validate response structure
     response_format_correct = validate_response_structure(processed_str, do_print)
@@ -125,6 +125,8 @@ def compute_score(solution_str, ground_truth):
     if do_print:
         print(f"--------------------------------")
         print(f"Solution string: {solution_str}")
+        print(f"func_name: {func_name}")
+        print(f"code: {code}")
     
     answer_score = 0
     if format_correct and answer_text:
