@@ -89,7 +89,7 @@ def coverage_at_k_sample(passed_tests, k, cov_command_prefix):
     
 
 
-def check_correctness(generated_data, ks=[1, 2, 5]):
+def evaluation(generated_data, ks=[1, 2, 5]):
     """Compute syntactical, execution, and assertion correctness (with coverage)."""
     total_cases = 0
     total_syn_correct = 0
@@ -247,7 +247,7 @@ def check_correctness(generated_data, ks=[1, 2, 5]):
 
 
 def get_reward(generated_data):
-    all_scores = check_correctness(generated_data)
+    all_scores = evaluation(generated_data)
     if all_scores['syn_correct'] < 0.98:
         reward = -1.0  # severely penalize if most test cases are invalid
     elif all_scores['exec_correct'] < 0.85:
@@ -282,5 +282,5 @@ if __name__=='__main__':
     predictions=read_jsonl(output_dir / args.path)
     print(len(predictions))
 
-    all_scores = check_correctness(predictions, ks=args.ks)
+    all_scores = evaluation(predictions, ks=args.ks)
     
