@@ -276,11 +276,12 @@ def parse_args():
 
 if __name__=='__main__':
     args=parse_args()
-    print(args.path)
-    print(args.ks)
-    output_dir = Path('predictions')
-    predictions=read_jsonl(output_dir / args.path)
-    print(len(predictions))
+    # print(args.path)
+    # print(args.ks)
+    # output_dir = Path('predictions')
+    # predictions=read_jsonl(output_dir / args.path)
+    # print(len(predictions))
 
-    all_scores = evaluation(predictions, ks=args.ks)
+    # all_scores = evaluation(predictions, ks=args.ks)
     
+    print(get_reward("def test_None():\n    solution=Solution()\n    test_input = ['R', 'L', 'U', 'D']\n    assert solution.chekReturnToOrigin(test_input) == True,\n    print('Test passed')\n"))
