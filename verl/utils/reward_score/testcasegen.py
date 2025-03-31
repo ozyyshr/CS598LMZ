@@ -8,7 +8,7 @@ except:
     print("Failed to import java_init")
     pass
 
-from evaluation_and_reward import *
+from testgen_evaluation import *
 
 
 def extract_solution(solution_str):
@@ -82,13 +82,13 @@ def validate_response_structure(processed_str: str, do_print: bool) -> bool:
 
         
     
-def calculate_answer_score_scale(answer_text, do_print=False):
+def calculate_answer_score_scale(answer_text, func_name, code, do_print=False):
     """Calculate answer score based on answer span rank."""
     try:
         data = json.loads(answer_text)
         generated_test_method = data["test_method"]
         
-        reward = get_reward(generated_test_method)
+        reward = get_reward(code=code, testcase=generated_test_method, func_name=func_name)
         answer_score = reward
         
     except Exception as e:
@@ -111,6 +111,8 @@ def compute_score(solution_str, ground_truth):
 
     # label is a list of groundtruth pmids    
     answer_text, processed_str = extract_solution(solution_str)
+    func_name = ground_truth['func_name']
+    code = ground_truth['code']
     
     do_print = random.randint(1, 32) == 1
 
@@ -126,7 +128,7 @@ def compute_score(solution_str, ground_truth):
     
     answer_score = 0
     if format_correct and answer_text:
-        answer_score = calculate_answer_score_scale(answer_text, do_print)
+        answer_score = calculate_answer_score_scale(answer_text, func_name, code, do_print)
 
     total_score = format_score + answer_score
 

@@ -521,3 +521,8 @@ if __name__=='__main__':
 
     all_scores = overall_evaluation(predictions, ks=args.ks)
 '''
+
+
+# if __name__=='__main__':
+ 
+#      print(get_reward("def test_None():\n    solution=Solution()\n    test_input = ['R', 'L', 'U', 'D']\n    assert solution.chekReturnToOrigin(test_input) == True,\n    print('Test passed')\n"))

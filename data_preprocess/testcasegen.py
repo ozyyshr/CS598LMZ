@@ -79,7 +79,7 @@ Let me think step by step.
 <think>
 """
 
-    return input_str
+    return input_str, func_name, code
 
 
 def load_dataset_testcasegen():
@@ -115,7 +115,7 @@ if __name__ == '__main__':
     
     def make_map_fn(split):
         def process_fn_test(example, idx):
-            question = make_prefix(example, split)
+            question, func_name, code = make_prefix(example, split)
             solution = {
                 "target": "",
             }
@@ -128,7 +128,9 @@ if __name__ == '__main__':
                 "ability": "coding",
                 "reward_model": {
                     "style": "rule",
-                    "ground_truth": solution
+                    "ground_truth": solution,
+                    "func_name": func_name,
+                    "code": code
                 },
                 "extra_info": {
                     'split': split,
