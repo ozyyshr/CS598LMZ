@@ -33,7 +33,7 @@ python3 -m verl.trainer.main_ppo \
     trainer.test_freq=500 \
     trainer.project_name=testcasegen \
     trainer.experiment_name=testcasegen_run1 \
-    actor_rollout_ref.model.path=Qwen/Qwen2.5-3B-Instruct \
-    critic.model.path=Qwen/Qwen2.5-3B-Instruct \
+    actor_rollout_ref.model.path=Qwen/Qwen2.5-Coder-3B-Instruct \
+    critic.model.path=Qwen/Qwen2.5-Coder-3B-Instruct \
     trainer.default_local_dir=/shared/eng/pj20/lmz_model/testcasegen_run1 \
     trainer.total_epochs=15 2>&1 | tee exp_log/testcasegen_run1_$DATE.log 
