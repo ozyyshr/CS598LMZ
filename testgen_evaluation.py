@@ -13,7 +13,6 @@ from argparse import ArgumentParser
 from copy import deepcopy
 # from data_utils import read_jsonl
 
-# pip install pytest
 # pip install pytest pytest-cov
 
 
