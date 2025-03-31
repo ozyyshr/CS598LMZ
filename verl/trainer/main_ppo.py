@@ -121,6 +121,9 @@ def _select_rm_score_fn(data_source):
     elif 'wikisql' in data_source:
         from verl.utils.reward_score import wikisql
         return wikisql.compute_score
+    elif 'testcasegen' in data_source:
+        from verl.utils.reward_score import testcasegen
+        return testcasegen.compute_score
     else:
         raise NotImplementedError
 

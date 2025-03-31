@@ -238,8 +238,8 @@ def evaluation(generated_data, ks=[1, 2, 5]):
     avg_line_cov = total_line_cov / len(generated_data)
     avg_branch_cov = total_branch_cov / len(generated_data)
     # print(f'Average Line Coverage: {avg_line_cov}, Average Branch Coverage: {avg_branch_cov}')
-    all_scores['avg_line_cov', avg_line_cov]
-    all_scores['avg_branch_cov', avg_branch_cov]
+    all_scores['avg_line_cov'] = avg_line_cov
+    all_scores['avg_branch_cov'] = avg_branch_cov
 
     # Include assertion correctness in the return value
     return all_scores, exec_fails
@@ -260,10 +260,10 @@ def get_reward(generated_data):
             0.3 * all_scores['assert_correct']
         )
         # Bonus for coverage
-        if coverage_score is not None:
+        if all_scores['avg_line_cov'] is not None and all_scores['avg_branch_cov'] is not None:
             reward += 0.5 * all_scores['avg_line_cov'] + 0.5 * all_scores['avg_branch_cov']
 
-    
+    return reward
 
 
 

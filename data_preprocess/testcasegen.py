@@ -67,14 +67,15 @@ def make_prefix(dp, split):
 </think>
 <answer>
 {
-    "test method": "...."
+    "test_method": "...."
 } 
 </answer>. 
 Note: Your answer should not include any quotation marks or descriptions outside the function definition.
 """
 
-    input_str +=  prompt + """
-Assistant: Let me think step by step. 
+    input_str +=  prompt + """<|im_end|>
+<|im_start|>assistant
+Let me think step by step. 
 <think>
 """
 
