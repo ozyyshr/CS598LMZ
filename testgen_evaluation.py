@@ -11,11 +11,44 @@ from pathlib import Path
 from tqdm import tqdm
 from argparse import ArgumentParser
 from copy import deepcopy
+import time
+import atexit
+import functools
 # from data_utils import read_jsonl
 
 # pip install pytest pytest-cov
 
+def cleanup_on_exit(func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        test_dir = None
+        try:
+            result = func(*args, **kwargs)
+            return result
+        finally:
+            # Get the test_dir from the function's local variables
+            if 'test_dir' in locals():
+                test_dir = locals()['test_dir']
+            elif len(args) > 3:  # Assuming test_dir is the 4th argument
+                test_dir = args[3]
+            
+            if test_dir and os.path.exists(test_dir):
+                try:
+                    shutil.rmtree(test_dir, ignore_errors=True)
+                except Exception:
+                    pass
+    return wrapper
 
+# Register cleanup of any remaining tmp directories on program exit
+def cleanup_tmp_dirs():
+    try:
+        for d in Path('.').glob('tmp_*_test_*'):
+            if d.is_dir():
+                shutil.rmtree(d, ignore_errors=True)
+    except Exception:
+        pass
+
+atexit.register(cleanup_tmp_dirs)
 
 class TimeoutHandler:
     def __init__(self, timeout, error_message=None):
@@ -39,14 +72,15 @@ def execute(test_code,timeout=5):
         exec_globals = {}
         with TimeoutHandler(timeout):
             exec(test_code, globals()) 
+            print("executed")
             return True
     except AssertionError: #assertionerror is considered as executable
         return True
     except TimeoutError:
-        #print("timed out")
+        print("timed out")
         return False
     except Exception as e:
-        #print(f"failed: {type(e).__name__}")
+        print(f"failed: {type(e).__name__}")
         return type(e).__name__, e #return error type and error message
     
 
@@ -93,6 +127,7 @@ def coverage_at_k_sample(passed_tests, k, cov_command_prefix):
 
 
 
+@cleanup_on_exit
 def evaluate_one_case(code, testcase, func_name="solution", i=0, difficulty="test", ks=[1]):
     """
     Evaluate a single test case for a single code snippet.
@@ -109,8 +144,11 @@ def evaluate_one_case(code, testcase, func_name="solution", i=0, difficulty="tes
         tuple: (syn_correct, exec_correct, assert_correct, avg_line_cov, avg_branch_cov)
     """
     # Set up environment for testing
-    test_dir = f'tmp_{i}_{difficulty}'
+    # print(1)
+    timestamp = time.time()
+    test_dir = f'tmp_{i}_{difficulty}_{timestamp}'
     os.makedirs(test_dir, exist_ok=True)
+    # print(2)
     
     with open(f'{test_dir}/under_test.py', 'w') as f:
         f.write(code)
@@ -204,12 +242,6 @@ def evaluate_one_case(code, testcase, func_name="solution", i=0, difficulty="tes
         # Syntax error
         pass
     
-    # Clean up test directory
-    try:
-        shutil.rmtree(test_dir)
-    except Exception:
-        pass
-    
     return syn_correct, exec_correct, assert_correct, line_cov, branch_cov
 
 
@@ -224,8 +256,6 @@ def get_reward(code, testcase, func_name="solution"):
     else:
         reward = 0.2 * assert_correct + 0.4 * avg_line_cov + 0.4 * avg_branch_cov  # bonus for thoroughness
     return reward
-
-
 
 
 
@@ -523,6 +553,54 @@ if __name__=='__main__':
 '''
 
 
-# if __name__=='__main__':
- 
-#      print(get_reward("def test_None():\n    solution=Solution()\n    test_input = ['R', 'L', 'U', 'D']\n    assert solution.chekReturnToOrigin(test_input) == True,\n    print('Test passed')\n"))
+if __name__=='__main__':
+    test_case = """def test_removeInvalidParentheses():
+        solution=Solution()
+        test_cases = [
+            ("()())()", ["()()"]),
+            ("(a)())()", ["(a)()", "(a())"]),
+            (")", [""]),
+            ("()()(", ["(())", "()()"]),
+            ("", [""])
+        ]
+        for i, (input_str, expected_output) in enumerate(test_cases):
+            with self.subTest(i=i):
+                assert solution.removeInvalidParentheses(input_str) == expected_output
+    """
+    func_name = 'removeInvalidParentheses'
+    code = """class Solution:
+    def removeInvalidParentheses(self, s: str):
+            visited = set()
+            queue = deque([s])
+            result = []
+            found = False
+
+            while queue:
+                cur = queue.popleft()
+
+                if self.is_valid(cur):
+                    found = True
+                    result.append(cur)
+
+                if found: continue
+
+                for i in range(len(cur)):
+                    if cur[i] == '(' or cur[i] == ')':
+                        next_str = cur[:i] + cur[i+1:]
+                        if next_str not in visited:
+                            visited.add(next_str)
+                            queue.append(next_str)
+
+            return result
+
+        def is_valid(self, s: str) -> bool:
+            count = 0
+            for c in s:
+                if c == '(': count += 1
+                if c == ')':
+                    count -= 1
+                    if count < 0: return False
+            return count == 0
+    """
+    
+    print(get_reward(code, test_case, func_name))
