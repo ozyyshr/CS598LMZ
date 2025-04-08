@@ -18,6 +18,82 @@ import functools
 
 # pip install pytest pytest-cov
 
+def cleanup_test_dir(test_dir):
+    """Explicitly clean up a test directory with multiple fallback methods."""
+    if not test_dir or not os.path.exists(test_dir):
+        return
+        
+    try:
+        # Force close any open file handles
+        import gc
+        gc.collect()
+        
+        # Specifically target .pytest_cache first - often a problematic folder
+        pytest_cache_dir = os.path.join(test_dir, '.pytest_cache')
+        if os.path.exists(pytest_cache_dir):
+            try:
+                # Remove read-only attributes if on Windows
+                if os.name == 'nt':
+                    import stat
+                    for root, dirs, files in os.walk(pytest_cache_dir):
+                        for file in files:
+                            file_path = os.path.join(root, file)
+                            os.chmod(file_path, stat.S_IWRITE)
+                
+                # Try to remove .pytest_cache directory specifically
+                shutil.rmtree(pytest_cache_dir, ignore_errors=True)
+            except Exception as e:
+                print(f"Error removing pytest cache: {e}")
+        
+        # Wait a short moment
+        time.sleep(0.2)
+        
+        # Now try to remove the entire test directory
+        for attempt in range(3):
+            # Try using platform-specific commands first
+            if os.name == 'posix':  # Linux/Mac
+                os.system(f"rm -rf {test_dir}")
+            elif os.name == 'nt':  # Windows
+                os.system(f"rd /s /q {test_dir}")
+            else:
+                shutil.rmtree(test_dir, ignore_errors=True)
+            
+            # Check if it worked
+            if not os.path.exists(test_dir):
+                print(f"Cleaned up test directory: {test_dir}")
+                break
+            
+            # If still exists, delete any remaining files individually
+            if attempt == 1:
+                for root, dirs, files in os.walk(test_dir, topdown=False):
+                    for file in files:
+                        try:
+                            file_path = os.path.join(root, file)
+                            if os.path.exists(file_path):
+                                os.chmod(file_path, 0o777)  # Set all permissions
+                                os.remove(file_path)
+                        except Exception:
+                            pass
+                    for dir in dirs:
+                        try:
+                            dir_path = os.path.join(root, dir)
+                            if os.path.exists(dir_path):
+                                os.rmdir(dir_path)
+                        except Exception:
+                            pass
+            
+            # Wait before trying again
+            time.sleep(0.5)
+        
+        # Final verification
+        if os.path.exists(test_dir):
+            print(f"Warning: Could not fully remove test directory: {test_dir}")
+            # Add this directory to a cleanup list for program exit
+            atexit.register(lambda: shutil.rmtree(test_dir, ignore_errors=True) 
+                            if os.path.exists(test_dir) else None)
+    except Exception as e:
+        print(f"Failed to clean up test directory {test_dir}: {str(e)}")
+
 def cleanup_on_exit(func):
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
@@ -32,11 +108,8 @@ def cleanup_on_exit(func):
             elif len(args) > 3:  # Assuming test_dir is the 4th argument
                 test_dir = args[3]
             
-            if test_dir and os.path.exists(test_dir):
-                try:
-                    shutil.rmtree(test_dir, ignore_errors=True)
-                except Exception:
-                    pass
+            if test_dir:
+                cleanup_test_dir(test_dir)
     return wrapper
 
 # Register cleanup of any remaining tmp directories on program exit
@@ -144,185 +217,110 @@ def evaluate_one_case(code, testcase, func_name="solution", i=0, difficulty="tes
         tuple: (syn_correct, exec_correct, assert_correct, avg_line_cov, avg_branch_cov)
     """
     # Set up environment for testing
-    # print(1)
-    timestamp = time.time()
-    test_dir = f'tmp_{i}_{difficulty}_{str(timestamp).replace(".", "")}'
-    os.makedirs(test_dir, exist_ok=True)
-    # print(2)
-    
-    with open(f'{test_dir}/under_test.py', 'w') as f:
-        f.write(code)
-    
-    test_import = f'from {test_dir}.under_test import Solution\n'
-    test_import_simple = f'from under_test import Solution\n'
-    
-    # Initialize results
-    syn_correct = 0
-    exec_correct = 0
-    assert_correct = 0
-    assert_present = 0
-    line_cov = 0
-    branch_cov = 0
-    
-    # Check for assertions
-    has_assertion = "assert " in testcase
-    if has_assertion:
-        assert_present = 1
-    
-    # Test syntax correctness
     try:
-        compile(testcase, '<string>', 'exec')
-        syn_correct = 1
+        timestamp = time.time()
+        test_dir = f'tmp_{i}_{difficulty}_{str(timestamp).replace(".", "")}'
+        os.makedirs(test_dir, exist_ok=True)
         
-        # Prepare full test code
-        test_code = test_import + testcase + f'\ntest_{func_name}()'
+        with open(f'{test_dir}/under_test.py', 'w') as f:
+            f.write(code)
         
-        # Check for assertion correctness
+        test_import = f'from {test_dir}.under_test import Solution\n'
+        test_import_simple = f'from under_test import Solution\n'
+        
+        # Initialize results
+        syn_correct = 0
+        exec_correct = 0
+        assert_correct = 0
+        assert_present = 0
+        line_cov = 0
+        branch_cov = 0
+        
+        # Check for assertions
+        has_assertion = "assert " in testcase
+        if has_assertion:
+            assert_present = 1
+        
+        # Test syntax correctness
         try:
-            with TimeoutHandler(5):
-                exec(test_code, globals())
-            # If assertion exists and doesn't fail, it's correct
-            if has_assertion and (test_code.find(f'solution.{func_name}') != -1):
-                # print("assert_correct: ", assert_correct)
-                assert_correct = 1
-        except AssertionError:
-            # Assertion failed, but test is still executable
-            # print("AssertionError: ", AssertionError)
-            pass
-        except Exception:
-            # Other exceptions handled by execute()
-            # print("Exception: ", Exception)
-            pass
-        print(test_code)
-        # Check execution correctness
-        res = execute(test_code)
-        # print(2)
-        passed_tests = []
-        
-        if res is True:
-            if test_code.find(f'solution.{func_name}') != -1:
-                exec_correct = 1
-                # Write test to file for coverage measurement
-                test_file = f'test_0.py'
-                with open(f'{test_dir}/{test_file}', 'w') as f:
-                    f.write(test_import_simple + testcase)
-                passed_tests.append(test_file)
-        
-        # Measure coverage if test passed
-        if passed_tests:
-            cov_command_prefix = ['pytest', '--cov=under_test', '--cov-branch', '--cov-report=json:coverage.json']
-            subprocess.run(f'cp .coveragerc {test_dir}/.coveragerc', shell=True)
+            compile(testcase, '<string>', 'exec')
+            syn_correct = 1
             
-            # Change to test directory
-            current_dir = os.getcwd()
-            os.chdir(test_dir)
+            # Prepare full test code
+            test_code = test_import + testcase + f'\ntest_{func_name}()'
             
+            # Check for assertion correctness
             try:
-                # Run coverage measurement
-                cov_command = deepcopy(cov_command_prefix)
-                for test in passed_tests:
-                    cov_command.append(test)
-                
-                subprocess.run(cov_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                
-                # Parse coverage results
-                with open('coverage.json') as f:
-                    cov_report = json.load(f)
-                
-                total_stmt = cov_report['totals']['num_statements']
-                covered_stmt = cov_report['totals']['covered_lines']
-                line_cov = covered_stmt / total_stmt if total_stmt > 0 else 0
-                
-                total_branch = cov_report['totals']['num_branches']
-                covered_branch = cov_report['totals']['covered_branches']
-                branch_cov = covered_branch / total_branch if total_branch > 0 else 0
-            except Exception:
-                # Failed to generate coverage report
-                print(f"Failed to generate coverage report for {test_dir}")
+                with TimeoutHandler(5):
+                    exec(test_code, globals())
+                # If assertion exists and doesn't fail, it's correct
+                if has_assertion and (test_code.find(f'solution.{func_name}') != -1):
+                    assert_correct = 1
+            except AssertionError:
+                # Assertion failed, but test is still executable
                 pass
-            finally:
-                os.chdir(current_dir)
-    except Exception:
-        # Syntax error
-        pass
-    
-    if os.path.exists(test_dir):
-        try:
-            # Return to parent directory in case we're inside the test_dir
-            os.chdir(current_dir)
+            except Exception:
+                # Other exceptions handled by execute()
+                pass
             
-            # Force close any open file handles
-            import gc
-            gc.collect()
+            # Check execution correctness
+            res = execute(test_code)
+            passed_tests = []
             
-            # Specifically target .pytest_cache first - often a problematic folder
-            pytest_cache_dir = os.path.join(test_dir, '.pytest_cache')
-            if os.path.exists(pytest_cache_dir):
+            if res is True:
+                if test_code.find(f'solution.{func_name}') != -1:
+                    exec_correct = 1
+                    # Write test to file for coverage measurement
+                    test_file = f'test_0.py'
+                    with open(f'{test_dir}/{test_file}', 'w') as f:
+                        f.write(test_import_simple + testcase)
+                    passed_tests.append(test_file)
+            
+            # Measure coverage if test passed
+            if passed_tests:
+                cov_command_prefix = ['pytest', '--cov=under_test', '--cov-branch', '--cov-report=json:coverage.json']
+                subprocess.run(f'cp .coveragerc {test_dir}/.coveragerc', shell=True)
+                
+                # Change to test directory
+                current_dir = os.getcwd()
+                os.chdir(test_dir)
+                
                 try:
-                    # Remove read-only attributes if on Windows
-                    if os.name == 'nt':
-                        import stat
-                        for root, dirs, files in os.walk(pytest_cache_dir):
-                            for file in files:
-                                file_path = os.path.join(root, file)
-                                os.chmod(file_path, stat.S_IWRITE)
+                    # Run coverage measurement
+                    cov_command = deepcopy(cov_command_prefix)
+                    for test in passed_tests:
+                        cov_command.append(test)
                     
-                    # Try to remove .pytest_cache directory specifically
-                    shutil.rmtree(pytest_cache_dir, ignore_errors=True)
-                except Exception as e:
-                    print(f"Error removing pytest cache: {e}")
-            
-            # Wait a short moment
-            time.sleep(0.2)
-            
-            # Now try to remove the entire test directory
-            for attempt in range(3):
-                # Try using platform-specific commands first
-                if os.name == 'posix':  # Linux/Mac
-                    os.system(f"rm -rf {test_dir}")
-                elif os.name == 'nt':  # Windows
-                    os.system(f"rd /s /q {test_dir}")
-                else:
-                    shutil.rmtree(test_dir, ignore_errors=True)
-                
-                # Check if it worked
-                if not os.path.exists(test_dir):
-                    print(f"Cleaned up test directory: {test_dir}")
-                    break
-                
-                # If still exists, delete any remaining files individually
-                if attempt == 1:
-                    for root, dirs, files in os.walk(test_dir, topdown=False):
-                        for file in files:
-                            try:
-                                file_path = os.path.join(root, file)
-                                if os.path.exists(file_path):
-                                    os.chmod(file_path, 0o777)  # Set all permissions
-                                    os.remove(file_path)
-                            except Exception:
-                                pass
-                        for dir in dirs:
-                            try:
-                                dir_path = os.path.join(root, dir)
-                                if os.path.exists(dir_path):
-                                    os.rmdir(dir_path)
-                            except Exception:
-                                pass
-                
-                # Wait before trying again
-                time.sleep(0.5)
-            
-            # Final verification
-            if os.path.exists(test_dir):
-                print(f"Warning: Could not fully remove test directory: {test_dir}")
-                # Add this directory to a cleanup list for program exit
-                atexit.register(lambda: shutil.rmtree(test_dir, ignore_errors=True) 
-                                if os.path.exists(test_dir) else None)
-        except Exception as e:
-            print(f"Failed to clean up test directory {test_dir}: {str(e)}")
+                    subprocess.run(cov_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    
+                    # Parse coverage results
+                    with open('coverage.json') as f:
+                        cov_report = json.load(f)
+                    
+                    total_stmt = cov_report['totals']['num_statements']
+                    covered_stmt = cov_report['totals']['covered_lines']
+                    line_cov = covered_stmt / total_stmt if total_stmt > 0 else 0
+                    
+                    total_branch = cov_report['totals']['num_branches']
+                    covered_branch = cov_report['totals']['covered_branches']
+                    branch_cov = covered_branch / total_branch if total_branch > 0 else 0
+                except Exception:
+                    # Failed to generate coverage report
+                    print(f"Failed to generate coverage report for {test_dir}")
+                    pass
+                finally:
+                    os.chdir(current_dir)
+        except Exception:
+            # Syntax error
+            pass
+        
+    except Exception as e:
+        print(f"Error in evaluate_one_case: {e}")
+        # Ensure cleanup happens even if there's an error
+        if 'test_dir' in locals():
+            cleanup_test_dir(test_dir)
     
     return syn_correct, exec_correct, assert_correct, line_cov, branch_cov
-
 
 
 
