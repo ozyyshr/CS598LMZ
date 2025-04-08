@@ -193,7 +193,7 @@ def evaluate_one_case(code, testcase, func_name="solution", i=0, difficulty="tes
         print(test_code)
         # Check execution correctness
         res = execute(test_code)
-        print(2)
+        # print(2)
         passed_tests = []
         
         if res is True:
@@ -235,12 +235,88 @@ def evaluate_one_case(code, testcase, func_name="solution", i=0, difficulty="tes
                 branch_cov = covered_branch / total_branch if total_branch > 0 else 0
             except Exception:
                 # Failed to generate coverage report
+                print(f"Failed to generate coverage report for {test_dir}")
                 pass
             finally:
                 os.chdir(current_dir)
     except Exception:
         # Syntax error
         pass
+    
+    if os.path.exists(test_dir):
+        try:
+            # Return to parent directory in case we're inside the test_dir
+            os.chdir(current_dir)
+            
+            # Force close any open file handles
+            import gc
+            gc.collect()
+            
+            # Specifically target .pytest_cache first - often a problematic folder
+            pytest_cache_dir = os.path.join(test_dir, '.pytest_cache')
+            if os.path.exists(pytest_cache_dir):
+                try:
+                    # Remove read-only attributes if on Windows
+                    if os.name == 'nt':
+                        import stat
+                        for root, dirs, files in os.walk(pytest_cache_dir):
+                            for file in files:
+                                file_path = os.path.join(root, file)
+                                os.chmod(file_path, stat.S_IWRITE)
+                    
+                    # Try to remove .pytest_cache directory specifically
+                    shutil.rmtree(pytest_cache_dir, ignore_errors=True)
+                except Exception as e:
+                    print(f"Error removing pytest cache: {e}")
+            
+            # Wait a short moment
+            time.sleep(0.2)
+            
+            # Now try to remove the entire test directory
+            for attempt in range(3):
+                # Try using platform-specific commands first
+                if os.name == 'posix':  # Linux/Mac
+                    os.system(f"rm -rf {test_dir}")
+                elif os.name == 'nt':  # Windows
+                    os.system(f"rd /s /q {test_dir}")
+                else:
+                    shutil.rmtree(test_dir, ignore_errors=True)
+                
+                # Check if it worked
+                if not os.path.exists(test_dir):
+                    print(f"Cleaned up test directory: {test_dir}")
+                    break
+                
+                # If still exists, delete any remaining files individually
+                if attempt == 1:
+                    for root, dirs, files in os.walk(test_dir, topdown=False):
+                        for file in files:
+                            try:
+                                file_path = os.path.join(root, file)
+                                if os.path.exists(file_path):
+                                    os.chmod(file_path, 0o777)  # Set all permissions
+                                    os.remove(file_path)
+                            except Exception:
+                                pass
+                        for dir in dirs:
+                            try:
+                                dir_path = os.path.join(root, dir)
+                                if os.path.exists(dir_path):
+                                    os.rmdir(dir_path)
+                            except Exception:
+                                pass
+                
+                # Wait before trying again
+                time.sleep(0.5)
+            
+            # Final verification
+            if os.path.exists(test_dir):
+                print(f"Warning: Could not fully remove test directory: {test_dir}")
+                # Add this directory to a cleanup list for program exit
+                atexit.register(lambda: shutil.rmtree(test_dir, ignore_errors=True) 
+                                if os.path.exists(test_dir) else None)
+        except Exception as e:
+            print(f"Failed to clean up test directory {test_dir}: {str(e)}")
     
     return syn_correct, exec_correct, assert_correct, line_cov, branch_cov
 
@@ -249,6 +325,11 @@ def evaluate_one_case(code, testcase, func_name="solution", i=0, difficulty="tes
 
 def get_reward(code, testcase, func_name="solution"):
     syn_correct, exec_correct, assert_correct, avg_line_cov, avg_branch_cov = evaluate_one_case(code, testcase, func_name=func_name, ks=[1])
+    print("syn_correct: ", syn_correct)
+    print("exec_correct: ", exec_correct)
+    print("assert_correct: ", assert_correct)
+    print("avg_line_cov: ", avg_line_cov)
+    print("avg_branch_cov: ", avg_branch_cov)
     if not syn_correct:
         reward = -1  # penalize invalid code
     elif not exec_correct:
