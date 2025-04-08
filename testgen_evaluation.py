@@ -182,13 +182,16 @@ def evaluate_one_case(code, testcase, func_name="solution", i=0, difficulty="tes
             with TimeoutHandler(5):
                 exec(test_code, globals())
             # If assertion exists and doesn't fail, it's correct
-            if has_assertion and test_code.find(f'solution.{func_name}') != -1:
+            if has_assertion and (test_code.find(f'solution.{func_name}') != -1):
+                # print("assert_correct: ", assert_correct)
                 assert_correct = 1
         except AssertionError:
             # Assertion failed, but test is still executable
+            # print("AssertionError: ", AssertionError)
             pass
         except Exception:
             # Other exceptions handled by execute()
+            # print("Exception: ", Exception)
             pass
         print(test_code)
         # Check execution correctness

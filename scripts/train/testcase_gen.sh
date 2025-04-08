@@ -1,4 +1,4 @@
-export CUDA_VISIBLE_DEVICES=1,2
+export CUDA_VISIBLE_DEVICES=4,5
 
 DATE=$(date '+%Y-%m-%d-%H-%M-%S')
 
@@ -7,7 +7,7 @@ python3 -m verl.trainer.main_ppo \
     data.val_files=data/testcasegen/test.parquet \
     data.train_batch_size=64 \
     data.val_batch_size=64 \
-    data.max_prompt_length=500 \
+    data.max_prompt_length=1000 \
     data.max_response_length=1000 \
     actor_rollout_ref.actor.optim.lr=1e-6 \
     actor_rollout_ref.actor.strategy=fsdp \
@@ -32,8 +32,8 @@ python3 -m verl.trainer.main_ppo \
     trainer.save_freq=100 \
     trainer.test_freq=500 \
     trainer.project_name=testcasegen \
-    trainer.experiment_name=testcasegen_run1 \
+    trainer.experiment_name=testcasegen_run2 \
     actor_rollout_ref.model.path=Qwen/Qwen2.5-Coder-3B-Instruct \
     critic.model.path=Qwen/Qwen2.5-Coder-3B-Instruct \
-    trainer.default_local_dir=/shared/eng/pj20/lmz_model/testcasegen_run1 \
-    trainer.total_epochs=15 2>&1 | tee exp_log/testcasegen_run1_$DATE.log 
+    trainer.default_local_dir=/shared/eng/pj20/lmz_model/testcasegen_run2 \
+    trainer.total_epochs=15 2>&1 | tee exp_log/testcasegen_run2_$DATE.log 
