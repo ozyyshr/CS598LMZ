@@ -132,7 +132,7 @@ class RewardManager():
     """The reward manager.
     """
 
-    def __init__(self, tokenizer, num_examine) -> None:
+    def __init__(self, tokenizer, num_examine, val=False) -> None:
         self.tokenizer = tokenizer
         self.num_examine = num_examine  # the number of batches of decoded responses to print to the console
         
@@ -143,6 +143,7 @@ class RewardManager():
             api_key = open('verl/utils/reward_score/apis/pubmed_api.key', 'r').read().strip()
             self.pubmed_api = PubmedAPI(api_key=api_key)
         self.ctgov_api = CTGovAPI()
+        self.val = val
         
     def __call__(self, data: DataProto):
         """We will expand this function gradually based on the available datasets"""
@@ -203,6 +204,8 @@ class RewardManager():
                 db_path = data_item.non_tensor_batch['extra_info']['db_path']
                 db_id = data_item.non_tensor_batch['extra_info']['db_id']
                 score = compute_score_fn(solution_str=sequences_str, ground_truth=ground_truth, data_source=data_source, db_path=db_path, db_id=db_id)
+            elif 'testcasegen' in data_source:
+                score = compute_score_fn(solution_str=sequences_str, ground_truth=ground_truth, val=self.val)
             else:
                 score = compute_score_fn(solution_str=sequences_str, ground_truth=ground_truth)
             
@@ -303,7 +306,7 @@ def main_task(config):
     reward_fn = RewardManager(tokenizer=tokenizer, num_examine=0)
 
     # Note that we always use function-based RM for validation
-    val_reward_fn = RewardManager(tokenizer=tokenizer, num_examine=1)
+    val_reward_fn = RewardManager(tokenizer=tokenizer, num_examine=1, val=True)
 
     resource_pool_manager = ResourcePoolManager(resource_pool_spec=resource_pool_spec, mapping=mapping)
 

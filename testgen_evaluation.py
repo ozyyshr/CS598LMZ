@@ -339,7 +339,7 @@ def get_reward(code, testcase, func_name="solution"):
         reward = 0  # neutral (valid but fails)
     else:
         reward = 0.2 * assert_correct + 0.4 * avg_line_cov + 0.4 * avg_branch_cov  # bonus for thoroughness
-    return reward
+    return syn_correct, exec_correct, assert_correct, avg_line_cov, avg_branch_cov, reward
 
 
 
