@@ -29,11 +29,11 @@ python3 -m verl.trainer.main_ppo \
     trainer.default_hdfs_dir=null \
     trainer.n_gpus_per_node=2 \
     trainer.nnodes=1 \
-    trainer.save_freq=100 \
-    trainer.test_freq=500 \
+    trainer.save_freq=50 \
+    trainer.test_freq=30 \
     trainer.project_name=testcasegen \
     trainer.experiment_name=testcasegen_run2 \
-    actor_rollout_ref.model.path=Qwen/Qwen2.5-Coder-3B-Instruct \
-    critic.model.path=Qwen/Qwen2.5-Coder-3B-Instruct \
+    actor_rollout_ref.model.path=/shared/eng/pj20/lmz_model/testcasegen_run2/actor/global_step_100_ \
+    critic.model.path=/shared/eng/pj20/lmz_model/testcasegen_run2/critic/global_step_100_ \
     trainer.default_local_dir=/shared/eng/pj20/lmz_model/testcasegen_run2 \
     trainer.total_epochs=15 2>&1 | tee exp_log/testcasegen_run2_$DATE.log 
