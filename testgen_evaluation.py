@@ -146,7 +146,7 @@ def evaluate_one_case(code, testcase, func_name="solution", i=0, difficulty="tes
     # Set up environment for testing
     # print(1)
     timestamp = time.time()
-    test_dir = f'tmp_{i}_{difficulty}_{timestamp}'
+    test_dir = f'tmp_{i}_{difficulty}_{str(timestamp).replace(".", "")}'
     os.makedirs(test_dir, exist_ok=True)
     # print(2)
     
@@ -190,10 +190,10 @@ def evaluate_one_case(code, testcase, func_name="solution", i=0, difficulty="tes
         except Exception:
             # Other exceptions handled by execute()
             pass
-        
+        print(test_code)
         # Check execution correctness
         res = execute(test_code)
-
+        print(2)
         passed_tests = []
         
         if res is True:
@@ -256,8 +256,6 @@ def get_reward(code, testcase, func_name="solution"):
     else:
         reward = 0.2 * assert_correct + 0.4 * avg_line_cov + 0.4 * avg_branch_cov  # bonus for thoroughness
     return reward
-
-
 
 
 

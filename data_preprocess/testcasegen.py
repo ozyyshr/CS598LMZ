@@ -20,19 +20,30 @@ You are a professional who writes {lang} test methods. Your task is to generate 
 
 def extract_function_details(code_str):
     # Match the function definition line and extract the function name
-    func_def_match = re.search(r'def\s+(\w+)\s*\(.*\):', code_str)
+    func_def_match = re.search(r'def\s+(\w+)\s*\((.*?)\):', code_str)
     if not func_def_match:
         return None, None
 
     func_name = func_def_match.group(1)
-
+    params = func_def_match.group(2).strip()
+    
     # Extract the full function code starting from the matched 'def' line
     func_start_index = func_def_match.start()
     
     # Optionally, we can attempt to extract until the function logically ends
     # For simplicity, we'll take until the next non-indented line or end of string
     lines = code_str[func_start_index:].splitlines()
-    func_lines = [lines[0]]
+    
+    # Modify the first line to add 'self' parameter if not already present
+    first_line = lines[0]
+    if params == "":
+        # No parameters, add self
+        first_line = first_line.replace("():", "(self):")
+    elif "self" not in params.split(',')[0]:
+        # Has parameters but no self, add self as first parameter
+        first_line = first_line.replace(f"({params}):", f"(self, {params}):")
+    
+    func_lines = [first_line]
 
     for line in lines[1:]:
         if line.strip() == "":
