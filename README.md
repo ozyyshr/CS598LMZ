@@ -5,4 +5,4 @@
 ```bash
 python data_preprocess/testcasegen.py
 ```
-This command will generate the preprocessed data and store it in the local directory ``data''. You can also use our processed ``.parquet'' files for training.
+This command will generate the preprocessed data and store it in the local directory "data". You can also use our processed ".parquet" files for training.
